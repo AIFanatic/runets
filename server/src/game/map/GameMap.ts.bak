@@ -1,0 +1,123 @@
+import { GameService } from "@runeserver-ts/service/GameService";
+import { Player } from "../entities/characters/player/Player";
+import { WorldItem } from "../entities/definitions/WorldItem";
+import { Position } from "../entities/Position";
+import { MapObject } from "./MapObject";
+import { Region } from "./Region";
+
+enum BroadcastAction {
+    ADD,
+    REMOVE,
+};
+
+export class GameMap {
+    private regions: Map<string, Region>;
+
+    constructor() {
+        this.regions = new Map();
+    }
+
+    public getPlayersByRegion(regionX: number, regionY: number): Player[] {
+        let players: Player[] = [];
+        GameService.getInstance().getPlayers().forEach(player => {
+            if (player.position.regionX === regionX && player.position.regionY === regionY) {
+                players.push(player);
+            }
+        });
+
+        return players;
+    }
+
+    public addWorldItem(worldItem: WorldItem, shouldBroadcast: boolean = true) {
+        const regionKey = `${worldItem.position.regionX},${worldItem.position.regionY}`;
+
+        const region = this.regions.has(regionKey) ? this.regions.get(regionKey) : new Region(worldItem.position.regionX, worldItem.position.regionY);
+        this.regions.set(regionKey, region);
+
+        const surroundingRegions = this.getSurroundingChunks(region);
+        for (let surroundingRegion of surroundingRegions) {
+            surroundingRegion.addItem(worldItem, shouldBroadcast);
+        }
+    }
+
+    public removeWorldItem(worldItem: WorldItem) {
+        const regionKey = `${worldItem.position.regionX},${worldItem.position.regionY}`;
+
+        const region = this.regions.get(regionKey);
+        if (region) {
+            region.removeItem(worldItem);
+
+            const surroundingRegions = this.getSurroundingChunks(region);
+            for (let surroundingRegion of surroundingRegions) {
+                surroundingRegion.removeItem(worldItem);
+            }
+        }
+    }
+
+    public addMapObject(mapObject: MapObject, shouldBroadcast: boolean = true) {
+        const regionKey = `${mapObject.position.regionX},${mapObject.position.regionY}`;
+
+        const region = this.regions.has(regionKey) ? this.regions.get(regionKey) : new Region(mapObject.position.regionX, mapObject.position.regionY);
+        this.regions.set(regionKey, region);
+
+        const surroundingRegions = this.getSurroundingChunks(region);
+        for (let surroundingRegion of surroundingRegions) {
+            surroundingRegion.addMapObject(mapObject, shouldBroadcast);
+        }
+    }
+
+    public removeMapObject(mapObject: MapObject) {
+        const regionKey = `${mapObject.position.regionX},${mapObject.position.regionY}`;
+
+        const region = this.regions.get(regionKey);
+        if (region) {
+            const surroundingRegions = this.getSurroundingChunks(region);
+            for (let surroundingRegion of surroundingRegions) {
+                console.log("HERE");
+                surroundingRegion.removeMapObject(mapObject);
+            }
+        }
+    }
+
+    private getRegionForPosition(position: Position): Region {
+        const regionKey = `${position.regionX},${position.regionY}`;
+        const region = this.regions.get(regionKey);
+        if (region) {
+            return region;
+        }
+        const newRegion = new Region(position.regionX, position.regionY);
+        this.regions.set(regionKey, newRegion);
+        return newRegion;
+    }
+
+    private getSurroundingChunks(region: Region): Region[] {
+        const regions: Region[] = [];
+
+        const mainX = region.regionX;
+        const mainY = region.regionY;
+
+        const offset = 2;
+        for(let x = mainX - offset; x <= mainX + offset; x++) {
+            for(let y = mainY - offset; y <= mainY + offset; y++) {
+                const regionKey = `${x},${y}`;
+                const region = this.regions.has(regionKey) ? this.regions.get(regionKey) : new Region(x, y);
+
+                regions.push(region);
+            }
+        }
+
+        return regions;
+    }
+
+    public getWorldItem(id: number, position: Position): WorldItem {
+        const region = this.getRegionForPosition(position);
+        const worldItem = region.getItem(id, position.getX(), position.getY());
+        return worldItem;
+    }
+
+    public getMapObject(id: number, position: Position): MapObject {
+        const region = this.getRegionForPosition(position);
+        const mapObject = region.getMapObject(id, position.getX(), position.getY());
+        return mapObject;
+    }
+}
